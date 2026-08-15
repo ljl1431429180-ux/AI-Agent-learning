@@ -1,7 +1,7 @@
 from langchain_core.tools import tool
 
 
-# 商品数据库
+
 products = [
 
     {
@@ -11,14 +11,12 @@ products = [
         "price": 2999
     },
 
-
     {
         "id": "8070",
         "size": "150cm",
         "style": "原木",
         "price": 3999
     },
-
 
     {
         "id": "8090",
@@ -31,37 +29,57 @@ products = [
 
 
 
+
+
 @tool
 def search_products(requirement: dict):
     """
     根据用户需求搜索商品。
 
-    参数:
+    requirement:
     {
         "size":"120cm",
         "style":"胡桃木",
         "budget":4000
     }
-
-    返回符合条件的商品列表
     """
+
+
+
+    # =========================
+    # 兼容 Agent 多包一层
+    # =========================
+
+    if "requirement" in requirement:
+
+        requirement = requirement["requirement"]
+
 
 
     result = []
 
 
-    size = requirement.get("size")
 
-    style = requirement.get("style")
+    size = requirement.get(
+        "size"
+    )
 
-    budget = requirement.get("budget",0)
+
+    style = requirement.get(
+        "style"
+    )
+
+
+    budget = requirement.get(
+        "budget",
+        0
+    )
 
 
 
     for product in products:
 
 
-        # 尺寸匹配
         if size:
 
             if product["size"] != size:
@@ -71,15 +89,56 @@ def search_products(requirement: dict):
 
 
         # 风格匹配
+
         if style:
 
-            if product["style"] != style:
 
-                continue
-
+            style_map = {
 
 
-        # 预算匹配
+                "木色":[
+
+                    "胡桃木",
+                    "原木"
+
+                ],
+
+
+                "实木":[
+
+                    "胡桃木",
+                    "原木"
+
+                ],
+
+
+                "现代":[
+
+                    "现代"
+
+                ]
+
+            }
+
+
+
+            if style in style_map:
+
+
+                if product["style"] not in style_map[style]:
+
+                    continue
+
+
+            else:
+
+
+                if product["style"] != style:
+
+                    continue
+
+
+
         if budget:
 
             if product["price"] > budget:

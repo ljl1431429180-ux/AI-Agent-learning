@@ -1,15 +1,57 @@
+from state import AgentState
 from nodes.react_agent import react_agent
 
 
-state={
 
-"user_input":
-"我要120cm胡桃木浴室柜,帮我看看有没有货"
-
-}
+print("电商客服 Agent")
+print("输入 exit 退出")
 
 
-result=react_agent(state)
+
+state = None
 
 
-print(result)
+
+while True:
+
+
+    user=input(
+        "用户:"
+    )
+
+
+    if user=="exit":
+        break
+
+
+
+    # 第一次创建state
+
+    if state is None:
+
+
+        state = AgentState(
+            user
+        )
+
+
+    else:
+
+
+        # 后续只更新输入
+
+        state.user_input = user
+
+
+
+
+    result = react_agent(
+        state
+    )
+
+
+
+    print(
+        "客服:",
+        result.answer
+    )

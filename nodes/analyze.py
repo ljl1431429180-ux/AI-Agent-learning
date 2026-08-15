@@ -50,8 +50,8 @@ def analyze_requirement(state: AgentState):
     state["requirement"] = requirement
 
 
-    state["logs"].append(
-    "Analyze: 用户需求解析完成"
+    print(
+        "Analyze:需求分析完成"
 )
 
 

@@ -3,6 +3,10 @@ from langchain_ollama import ChatOllama
 from tools.product import search_products
 from tools.inventory import check_inventory
 
+import json
+import re
+
+
 
 llm = ChatOllama(
     model="qwen2.5",
@@ -10,7 +14,7 @@ llm = ChatOllama(
 )
 
 
-# 工具集合
+
 tools = {
 
     "search_products": search_products,
@@ -21,21 +25,60 @@ tools = {
 
 
 
+
+def extract_json(text):
+
+    try:
+
+        match = re.search(
+            r"\{.*\}",
+            text,
+            re.S
+        )
+
+
+        if match:
+
+            return json.loads(
+                match.group()
+            )
+
+
+    except Exception as e:
+
+        print(
+            "JSON解析失败:",
+            e
+        )
+
+
+    return {}
+
+
+
+
+
 def react_node(state):
+
 
     user_input = state["user_input"]
 
 
-    prompt = f"""
+
+    prompt=f"""
+
 你是一个浴室柜销售Agent。
 
-你可以调用以下工具：
 
-1. search_products
-用途：
-根据用户需求搜索商品。
+你可以调用工具：
 
-参数：
+
+search_products:
+
+搜索商品
+
+参数:
+
 {{
 "wood_type":"",
 "size":"",
@@ -43,37 +86,43 @@ def react_node(state):
 }}
 
 
-2. check_inventory
-用途：
-查询商品库存。
 
-参数：
+check_inventory:
+
+查询库存
+
+参数:
+
 {{
 "product_id":""
 }}
 
 
-请严格按照下面格式输出：
+
+严格输出:
+
 
 Thought:
-你的思考
+
+思考
+
 
 Action:
+
 工具名称
 
+
 PARAM:
+
 JSON参数
 
 
-用户问题：
+
+用户问题:
 
 {user_input}
 
 
-如果已经获得答案：
-
-Final:
-最终回复
 
 """
 
@@ -81,7 +130,8 @@ Final:
     response = llm.invoke(prompt)
 
 
-    text = response.content
+    text=response.content
+
 
 
     print("\n===== ReAct Agent启动 =====")
@@ -90,98 +140,219 @@ Final:
 
 
 
-    # 判断是否调用工具
-
-    if "Action:" in text:
+    # 判断工具
 
 
-        action = None
+    if "Action:" not in text:
 
 
-        if "search_products" in text:
+        state["answer"]=text
 
-            action = "search_products"
-
-
-        elif "check_inventory" in text:
-
-            action = "check_inventory"
+        return state
 
 
 
-        if action:
+    if "search_products" in text:
+
+        action="search_products"
 
 
-            print("\n执行工具:", action)
+    elif "check_inventory" in text:
+
+        action="check_inventory"
 
 
-            # 简单参数解析
+    else:
 
-            if action == "search_products":
+        state["answer"]=text
+
+        return state
 
 
-                result = search_products(
-                    {
-                        "wood_type":"胡桃木",
-                        "size":"120cm",
-                        "budget":4000
-                    }
+
+
+    params=extract_json(text)
+
+
+
+    print(
+        "参数:",
+        params
+    )
+
+
+
+    # =========================
+    # 搜索商品
+    # =========================
+
+
+    if action=="search_products":
+
+
+
+        product_result = search_products.invoke(
+
+            {
+
+            "requirement":{
+
+
+                "size":
+                params.get(
+                    "size"
+                ),
+
+
+                "style":
+                params.get(
+                    "style",
+                    params.get(
+                        "wood_type"
+                    )
+                ),
+
+
+                "budget":
+                params.get(
+                    "budget"
                 )
 
+            }
 
-            elif action == "check_inventory":
+            }
 
-
-                result = check_inventory(
-                    "8067"
-                )
-
-
-            print("\n工具结果:")
-
-            print(result)
+        )
 
 
 
-            # 第二次让LLM总结
+        print(
+            "商品结果:",
+            product_result
+        )
 
-            final_prompt = f"""
 
-用户问题:
+
+        state["product"]=product_result
+
+
+
+        # 自动查询库存
+
+        if product_result:
+
+
+            product_id = product_result[0]["id"]
+
+
+
+            stock_result = check_inventory.invoke(
+
+                {
+
+                "product_id":
+                product_id
+
+                }
+
+            )
+
+
+            state["stock"]=stock_result
+
+
+
+            print(
+                "库存结果:",
+                stock_result
+            )
+
+
+
+    # =========================
+    # 用户直接查库存
+    # =========================
+
+
+    elif action=="check_inventory":
+
+
+
+        stock_result = check_inventory.invoke(
+
+            {
+
+            "product_id":
+            params.get(
+                "product_id"
+            )
+
+            }
+
+        )
+
+
+        state["stock"]=stock_result
+
+
+
+
+    # =========================
+    # 最终回答
+    # =========================
+
+
+    final_prompt=f"""
+
+
+用户需求:
 
 {user_input}
 
 
-工具返回:
 
-{result}
+商品信息:
+
+{state.get("product")}
 
 
-请根据工具结果回答用户。
 
-要求：
-像淘宝客服一样回答。
-简洁、自然。
+库存信息:
+
+{state.get("stock")}
+
+
+
+请作为淘宝浴室柜客服回复。
+
+
+
+要求:
+
+1.介绍匹配商品
+
+2.说明尺寸
+
+3.说明风格
+
+4.说明价格
+
+5.说明库存情况
+
+6.不要提工具
+
 
 
 """
 
 
-            final_response = llm.invoke(final_prompt)
-
-
-            state["answer"] = final_response.content
-
-
-        else:
-
-            state["answer"] = text
+    final_response=llm.invoke(
+        final_prompt
+    )
 
 
 
-    else:
-
-        state["answer"] = text
+    state["answer"]=final_response.content
 
 
 
